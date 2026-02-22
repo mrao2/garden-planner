@@ -1,0 +1,13 @@
+-- +goose Up
+ALTER TABLE plants
+  ADD COLUMN IF NOT EXISTS days_to_emerge TEXT NOT NULL DEFAULT '',
+  ADD COLUMN IF NOT EXISTS seed_spacing TEXT NOT NULL DEFAULT '',
+  ADD COLUMN IF NOT EXISTS row_spacing TEXT NOT NULL DEFAULT '',
+  ADD COLUMN IF NOT EXISTS thinning TEXT NOT NULL DEFAULT '';
+
+-- +goose Down
+ALTER TABLE plants
+  DROP COLUMN IF EXISTS days_to_emerge,
+  DROP COLUMN IF EXISTS seed_spacing,
+  DROP COLUMN IF EXISTS row_spacing,
+  DROP COLUMN IF EXISTS thinning;

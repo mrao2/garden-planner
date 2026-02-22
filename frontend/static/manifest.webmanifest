@@ -1,0 +1,22 @@
+{
+  "name": "Garden Planner",
+  "short_name": "Garden",
+  "description": "Local-first garden planning workspace.",
+  "display": "standalone",
+  "start_url": "/",
+  "theme_color": "#2f5d50",
+  "background_color": "#f6f1e9",
+  "icons": [
+    {
+      "src": "/icons/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    },
+    {
+      "src": "/icons/icon-maskable.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    }
+  ]
+}

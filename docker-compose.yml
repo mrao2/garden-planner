@@ -1,0 +1,91 @@
+services:
+  caddy:
+    image: caddy:2
+    ports:
+      - "8080:80"
+    volumes:
+      - ./dev/Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./frontend/build:/srv:ro
+    depends_on:
+      - api
+    restart: unless-stopped
+
+  api:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    environment:
+      APP_ENV: "local"
+      PORT: "8080"
+
+      DATABASE_URL: "${DATABASE_URL:-postgresql://garden:garden@db:5432/garden?sslmode=disable}"
+      RUN_MIGRATIONS: "true"
+      MIGRATIONS_DIR: "/migrations"
+      COMPANION_DATA_PATH: "/datasets/companion_plants_veg.csv"
+      OCR_ENDPOINT: "http://ocr:9010/ocr"
+
+      # MinIO (S3-compatible)
+      S3_ENDPOINT: "${S3_ENDPOINT:-http://minio:9000}"
+      S3_BUCKET: "${S3_BUCKET:-garden-media}"
+      S3_ACCESS_KEY: "${S3_ACCESS_KEY:-minioadmin}"
+      S3_SECRET_KEY: "${S3_SECRET_KEY:-minioadmin}"
+      S3_REGION: "${S3_REGION:-us-east-1}"
+      S3_USE_PATH_STYLE: "${S3_USE_PATH_STYLE:-true}"
+    volumes:
+      - ./datasets:/datasets:ro
+    depends_on:
+      - db
+      - minio
+      - ocr
+    restart: unless-stopped
+
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: "${POSTGRES_USER:-garden}"
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:-garden}"
+      POSTGRES_DB: "${POSTGRES_DB:-garden}"
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    restart: unless-stopped
+
+  minio:
+    image: quay.io/minio/aistor/minio:latest
+    command: minio server /mnt/data --license /minio.license --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: "${MINIO_ROOT_USER:-minioadmin}"
+      MINIO_ROOT_PASSWORD: "${MINIO_ROOT_PASSWORD:-minioadmin}"
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - miniodata:/mnt/data
+      - ./dev/minio.license:/minio.license:ro
+    restart: unless-stopped
+
+  minio_init:
+    image: minio/mc:latest
+    depends_on:
+      - minio
+    entrypoint: >
+      /bin/sh -c "
+      until mc alias set local http://minio:9000 minioadmin minioadmin; do sleep 2; done;
+      mc mb -p local/garden-media || true;
+      mc anonymous set none local/garden-media || true;
+      echo 'MinIO bucket ready';
+      "
+    restart: "no"
+
+  ocr:
+    build:
+      context: ./ocr
+      dockerfile: Dockerfile
+    ports:
+      - "9010:9010"
+    restart: unless-stopped
+
+volumes:
+  pgdata:
+  miniodata:
