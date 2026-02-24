@@ -27,6 +27,7 @@
   let slashCommandStart = null;
   let slashCommandEnd = null;
   let slashCommandType = null;
+  let savedSelectionRange = null;
   let loading = true;
   let error = null;
   let formError = null;
@@ -38,7 +39,10 @@
     loading = true;
     error = null;
     try {
-      entries = await listJournalEntries({ limit: 200 });
+      entries = await listJournalEntries({
+        limit: 200,
+        garden_id: $selectedGardenId || undefined
+      });
     } catch (err) {
       error = err instanceof Error ? err.message : 'Unable to load journal entries.';
     } finally {
@@ -205,7 +209,7 @@
         parts.push(element.textContent || '');
       }
     });
-    return parts.join('');
+    return parts.join('').replace(/\u200B/g, '');
   }
 
   function updateSlashCommand() {
@@ -255,32 +259,33 @@
     const trimmed = normalizeForMatch(query || '');
     if (type === 'plant') {
       if (!plants.length) return [];
-      if (!trimmed) return plants.slice(0, 8);
-      const matches = plants.filter((plant) => {
-        const nameKey = normalizeForMatch(plant.name || '');
-        return nameKey.includes(trimmed);
-      });
-      if (matches.length > 0) return matches.slice(0, 8);
+      if (!trimmed) return plants.slice(0, 50);
+      const byName = plants.filter((plant) =>
+        normalizeForMatch(plant.name || '').includes(trimmed)
+      );
+      if (byName.length > 0) return byName.slice(0, 50);
       return plants
         .filter((plant) => normalizeForMatch(plant.variety || '').includes(trimmed))
-        .slice(0, 8);
+        .slice(0, 50);
     }
     if (type === 'bed') {
       if (!beds.length) return [];
-      if (!trimmed) return beds.slice(0, 8);
+      if (!trimmed) return beds.slice(0, 50);
       return beds
         .filter((bed) => normalizeForMatch(bed.name || '').includes(trimmed))
-        .slice(0, 8);
+        .slice(0, 50);
     }
     if (type === 'planter') {
       if (!planters.length) return [];
-      if (!trimmed) return planters.slice(0, 8);
+      if (!trimmed) return planters.slice(0, 50);
       return planters
         .filter((planter) => normalizeForMatch(planter.name || '').includes(trimmed))
-        .slice(0, 8);
+        .slice(0, 50);
     }
     return [];
   }
+
+  $: plantMatches = showPlantPicker ? filterMatches(slashCommandType, plantQuery) : [];
 
   function insertSlashMatch(match) {
     if (slashCommandStart === null || slashCommandEnd === null || !slashCommandType) return;
@@ -291,6 +296,14 @@
     }
     const label = `${match.name}`.trim();
     insertToken(label, slashCommandType, match.id, slashCommandStart, slashCommandEnd);
+  }
+
+  function saveContentEditableSelection() {
+    if (!entryInput) return;
+    const sel = window.getSelection();
+    if (sel && sel.rangeCount > 0 && entryInput.contains(sel.anchorNode)) {
+      savedSelectionRange = sel.getRangeAt(0).cloneRange();
+    }
   }
 
   function insertToken(label, type, id, startIndex, endIndex) {
@@ -312,20 +325,23 @@
     pill.textContent = label;
     range.insertNode(pill);
     range.collapse(false);
-    const spaceNode = document.createTextNode(' ');
+    const spaceNode = document.createTextNode('\u200B ');
     range.insertNode(spaceNode);
-    entryInput.focus();
-    const selection = window.getSelection();
-    if (selection) {
-      selection.removeAllRanges();
-      const newRange = document.createRange();
-      newRange.setStartAfter(spaceNode);
-      newRange.collapse(true);
-      selection.addRange(newRange);
-    }
-    entryTextRaw = serializeEntryContent();
     resetPlantPicker();
+    entryTextRaw = serializeEntryContent();
     updatePlantAttributes();
+    // Use setTimeout to let mobile browsers settle before restoring focus/caret
+    setTimeout(() => {
+      entryInput.focus();
+      const selection = window.getSelection();
+      if (selection) {
+        selection.removeAllRanges();
+        const newRange = document.createRange();
+        newRange.setStartAfter(spaceNode);
+        newRange.collapse(true);
+        selection.addRange(newRange);
+      }
+    }, 10);
   }
 
   function getTextBeforeCaret(root) {
@@ -397,6 +413,10 @@
 
   $: if ($selectedGardenId && !entryGardenId) {
     entryGardenId = $selectedGardenId;
+  }
+
+  $: if ($selectedGardenId !== undefined) {
+    loadEntries();
   }
 
   $: if (entryGardenId) {
@@ -554,7 +574,7 @@
         </div>
         <div class="relative mt-4">
           <div
-            class="min-h-[160px] w-full rounded-2xl border border-earth-border bg-white p-3 text-sm"
+            class="min-h-[160px] max-h-[40vh] overflow-y-auto w-full rounded-2xl border border-earth-border bg-white p-3 text-sm"
             contenteditable
             role="textbox"
             aria-multiline="true"
@@ -563,29 +583,37 @@
             on:input={handleEntryInput}
             on:click={updateSlashCommand}
             on:keyup={updateSlashCommand}
+            on:blur={saveContentEditableSelection}
           ></div>
           {#if showPlantPicker}
-            <div class="absolute left-3 right-3 top-3 z-10 rounded-2xl border border-earth-border bg-white p-3 shadow-lg">
-            <p class="text-xs uppercase tracking-[0.2em] text-earth-terracotta">
-              /{slashCommandType === 'planter' ? 'container' : slashCommandType} matches
-            </p>
-            {#if plantMatches.length === 0}
-              <p class="mt-2 text-sm text-earth-text/60">No matches.</p>
-            {:else}
-              <div class="mt-2 flex flex-col gap-2">
-                {#each plantMatches as match}
-                  <button
-                    type="button"
-                    class="rounded-xl border border-earth-border px-3 py-2 text-left text-sm hover:bg-earth-bg/70"
-                    on:click={() => insertSlashMatch(match)}
-                  >
-                    <span class="font-semibold">{match.name}</span>
-                    {match.variety ? ` · ${match.variety}` : ''}
-                  </button>
-                {/each}
-              </div>
-            {/if}
-          </div>
+            <div class="absolute left-3 right-3 top-full z-10 mt-1 rounded-2xl border border-earth-border bg-white p-3 shadow-lg">
+              <p class="text-xs uppercase tracking-[0.2em] text-earth-terracotta">
+                /{slashCommandType === 'planter' ? 'container' : slashCommandType} matches
+              </p>
+              <input
+                type="text"
+                placeholder="Search…"
+                class="mt-2 w-full rounded-xl border border-earth-border bg-earth-bg px-3 py-1.5 text-sm outline-none focus:border-earth-terracotta"
+                bind:value={plantQuery}
+              />
+              {#if plantMatches.length === 0}
+                <p class="mt-2 text-sm text-earth-text/60">No matches.</p>
+              {:else}
+                <div class="mt-2 flex max-h-64 flex-col gap-2 overflow-y-auto">
+                  {#each plantMatches as match}
+                    <button
+                      type="button"
+                      class="rounded-xl border border-earth-border px-3 py-2 text-left text-sm hover:bg-earth-bg/70 active:bg-earth-bg"
+                      on:mousedown|preventDefault={() => {}}
+                      on:click={() => insertSlashMatch(match)}
+                    >
+                      <span class="font-semibold">{match.name}</span>
+                      {match.variety ? ` · ${match.variety}` : ''}
+                    </button>
+                  {/each}
+                </div>
+              {/if}
+            </div>
           {/if}
         </div>
         <div class="mt-4 rounded-2xl border border-earth-border bg-white p-3">

@@ -126,7 +126,7 @@
       </div>
     {/if}
 
-    <div class="grid gap-6 md:grid-cols-3">
+    <div class="grid gap-6 sm:grid-cols-2 md:grid-cols-3">
       <div class="rounded-3xl border border-earth-border bg-earth-surface p-6">
         <p class="text-xs uppercase tracking-[0.3em] text-earth-terracotta">Gardens</p>
         <p class="mt-4 text-3xl font-semibold">
@@ -265,7 +265,7 @@
 
 {#if showGardenModal}
   <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
-    <div class="w-full max-w-xl rounded-3xl border border-earth-border bg-earth-surface p-6">
+    <div class="w-full max-w-xl max-h-[90vh] overflow-y-auto rounded-3xl border border-earth-border bg-earth-surface p-6">
       <div class="flex items-center justify-between">
         <h2 class="text-lg font-semibold">{editingGardenId ? 'Edit garden' : 'Add garden'}</h2>
         <button

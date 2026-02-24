@@ -2,6 +2,8 @@
   import { onMount } from 'svelte';
   import {
     createPlant,
+    updatePlant,
+    deletePlant,
     listPlants,
     getCompanionData,
     listJournalEntries,
@@ -9,11 +11,15 @@
   } from '$lib/api';
 
   let query = '';
+  let filterSeason = '';
+  let filterStarred = false;
   let plants = [];
   let loading = true;
   let error = null;
   let formError = null;
   let isSaving = false;
+  let editingPlantId = null;
+  let confirmDeletePlantId = null;
 
   let name = '';
   let variety = '';
@@ -22,13 +28,13 @@
   let notes = '';
   let daysToMaturity = '';
   let sowDepth = '';
-  let germinationTime = '';
   let whenToSow = '';
   let daysToEmerge = '';
   let seedSpacing = '';
   let rowSpacing = '';
   let thinning = '';
   let showModal = false;
+
   let showScanModal = false;
   let scanFile = null;
   let scanLoading = false;
@@ -56,10 +62,8 @@
     emerge: 'Days to emerge',
     seed_spacing: 'Seed spacing',
     row_spacing: 'Row spacing',
-    thinning: 'Thinning',
     days_to_maturity: 'Days to maturity',
     depth: 'Sow depth',
-    germination_time: 'Germination time',
     when_to_sow: 'When to sow',
     notes: 'Notes'
   };
@@ -70,15 +74,45 @@
   let journalByPlant = {};
   let journalLoading = false;
 
+  const PAGE_SIZE = 25;
+  let currentPage = 1;
+
+  $: seasons = [...new Set(plants.map((p) => p.season).filter(Boolean))].sort();
+
+  $: filteredPlants = plants.filter((p) => {
+    const q = query.toLowerCase().trim();
+    const matchesText =
+      !q ||
+      p.name.toLowerCase().includes(q) ||
+      (p.variety || '').toLowerCase().includes(q);
+    const matchesSeason = !filterSeason || p.season === filterSeason;
+    const matchesStarred = !filterStarred || p.is_starred;
+    return matchesText && matchesSeason && matchesStarred;
+  });
+
+  $: totalPages = Math.max(1, Math.ceil(filteredPlants.length / PAGE_SIZE));
+  $: safePage = Math.min(Math.max(1, currentPage), totalPages);
+  $: pagedPlants = filteredPlants.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
+
   async function loadPlants() {
     loading = true;
     error = null;
     try {
-      plants = await listPlants({ limit: 200, q: query || undefined });
+      plants = await listPlants({ limit: 500 });
     } catch (err) {
       error = err instanceof Error ? err.message : 'Unable to load plants.';
     } finally {
       loading = false;
+    }
+  }
+
+  async function toggleStar(plant) {
+    const newVal = !plant.is_starred;
+    try {
+      await updatePlant(plant.id, { is_starred: newVal });
+      plants = plants.map((p) => (p.id === plant.id ? { ...p, is_starred: newVal } : p));
+    } catch (err) {
+      error = err instanceof Error ? err.message : 'Unable to update star.';
     }
   }
 
@@ -95,7 +129,7 @@
 
     isSaving = true;
     try {
-      const created = await createPlant({
+      const payload = {
         name: name.trim(),
         variety: variety.trim(),
         season: season.trim(),
@@ -103,32 +137,70 @@
         notes: notes.trim(),
         days_to_maturity: daysToMaturity ? Number(daysToMaturity) : null,
         sow_depth: sowDepth.trim(),
-        germination_time: germinationTime.trim(),
         when_to_sow: whenToSow.trim(),
         days_to_emerge: daysToEmerge.trim(),
         seed_spacing: seedSpacing.trim(),
         row_spacing: rowSpacing.trim(),
         thinning: thinning.trim()
-      });
-      plants = [created, ...plants.filter((plant) => plant.id !== created.id)];
-      await loadPlants();
-      name = '';
-      variety = '';
-      season = '';
-      spacing = '';
-      notes = '';
-      daysToMaturity = '';
-      sowDepth = '';
-      germinationTime = '';
-      whenToSow = '';
-      daysToEmerge = '';
-      seedSpacing = '';
-      rowSpacing = '';
-      thinning = '';
+      };
+      if (editingPlantId) {
+        const updated = await updatePlant(editingPlantId, payload);
+        plants = plants.map((p) => (p.id === updated.id ? updated : p));
+      } else {
+        const created = await createPlant(payload);
+        plants = [created, ...plants.filter((p) => p.id !== created.id)];
+        await loadPlants();
+      }
+      resetPlantForm();
     } catch (err) {
       formError = err instanceof Error ? err.message : 'Unable to save plant.';
     } finally {
       isSaving = false;
+    }
+  }
+
+  function resetPlantForm() {
+    name = '';
+    variety = '';
+    season = '';
+    spacing = '';
+    notes = '';
+    daysToMaturity = '';
+    sowDepth = '';
+    whenToSow = '';
+    daysToEmerge = '';
+    seedSpacing = '';
+    rowSpacing = '';
+    thinning = '';
+    editingPlantId = null;
+    formError = null;
+  }
+
+  function openEditModal(plant) {
+    editingPlantId = plant.id;
+    name = plant.name || '';
+    variety = plant.variety || '';
+    season = plant.season || '';
+    spacing = plant.spacing || '';
+    notes = plant.notes || '';
+    daysToMaturity = plant.days_to_maturity != null ? String(plant.days_to_maturity) : '';
+    sowDepth = plant.sow_depth || '';
+    whenToSow = plant.when_to_sow || '';
+    daysToEmerge = plant.days_to_emerge || '';
+    seedSpacing = plant.seed_spacing || '';
+    rowSpacing = plant.row_spacing || '';
+    thinning = plant.thinning || '';
+    formError = null;
+    showModal = true;
+  }
+
+  async function handleDeletePlant(plantId) {
+    try {
+      await deletePlant(plantId);
+      plants = plants.filter((p) => p.id !== plantId);
+      if (selectedPlantId === plantId) selectedPlantId = '';
+    } catch (err) {
+      error = err instanceof Error ? err.message : 'Unable to delete plant.';
     }
   }
 
@@ -148,7 +220,6 @@
       notes = scanResult.notes || '';
       daysToMaturity = scanResult.days_to_maturity ? String(scanResult.days_to_maturity) : '';
       sowDepth = scanResult.sow_depth || '';
-      germinationTime = scanResult.germination_time || '';
       whenToSow = scanResult.when_to_sow || '';
       daysToEmerge = scanResult.days_to_emerge || '';
       seedSpacing = scanResult.seed_spacing || '';
@@ -263,10 +334,6 @@
     helperMappings = next;
   }
 
-  $: if (query) {
-    loadPlants();
-  }
-
   $: if (selectedPlantId) {
     const selected = plants.find((plant) => plant.id === selectedPlantId);
     if (selected) {
@@ -321,13 +388,41 @@
         Keep reference data for your core crops, spacing, and seasonal notes.
       </p>
     </div>
-    <div class="min-w-[240px]">
-      <label class="text-xs uppercase tracking-[0.3em] text-earth-terracotta">Search</label>
-      <input
-        class="mt-2 w-full rounded-2xl border border-earth-border bg-white px-3 py-2 text-sm"
-        placeholder="Filter plants"
-        bind:value={query}
-      />
+    <div class="flex flex-col gap-3">
+      <div class="min-w-[280px]">
+        <label class="text-xs uppercase tracking-[0.3em] text-earth-terracotta">Search</label>
+        <input
+          class="mt-2 w-full rounded-2xl border border-earth-border bg-white px-3 py-2 text-sm"
+          placeholder="Filter by name or variety"
+          bind:value={query}
+          on:input={() => (currentPage = 1)}
+        />
+      </div>
+      {#if seasons.length > 0}
+        <div class="flex flex-wrap gap-2">
+          <button
+            class="rounded-full border px-3 py-1 text-xs font-semibold transition-colors {filterStarred ? 'border-amber-500 bg-amber-500 text-white' : 'border-earth-border text-earth-text/70'}"
+            on:click={() => { filterStarred = !filterStarred; currentPage = 1; }}
+          >
+            ★ Starred
+          </button>
+          <span class="border-r border-earth-border"></span>
+          <button
+            class="rounded-full border px-3 py-1 text-xs font-semibold transition-colors {!filterSeason ? 'border-earth-forest bg-earth-forest text-earth-bg' : 'border-earth-border text-earth-text/70'}"
+            on:click={() => { filterSeason = ''; currentPage = 1; }}
+          >
+            All
+          </button>
+          {#each seasons as s}
+            <button
+              class="rounded-full border px-3 py-1 text-xs font-semibold transition-colors {filterSeason === s ? 'border-earth-forest bg-earth-forest text-earth-bg' : 'border-earth-border text-earth-text/70'}"
+              on:click={() => { filterSeason = filterSeason === s ? '' : s; currentPage = 1; }}
+            >
+              {s}
+            </button>
+          {/each}
+        </div>
+      {/if}
     </div>
   </div>
 
@@ -338,13 +433,19 @@
           <div>
             <h2 class="text-lg font-semibold">Registry</h2>
             <p class="mt-1 text-sm text-earth-text/70">
-              {loading ? 'Loading plants…' : `${plants.length} plants`}
+              {#if loading}
+                Loading plants…
+              {:else if filteredPlants.length === plants.length}
+                {plants.length} plants
+              {:else}
+                {filteredPlants.length} of {plants.length} plants
+              {/if}
             </p>
           </div>
           <button
             class="rounded-full bg-earth-forest px-5 py-2.5 text-sm font-semibold text-earth-bg"
             on:click={() => {
-              formError = null;
+              resetPlantForm();
               showModal = true;
             }}
           >
@@ -375,6 +476,7 @@
         <table class="w-full text-left text-sm">
           <thead class="bg-earth-bg/80 text-xs uppercase tracking-[0.2em] text-earth-terracotta">
             <tr>
+              <th class="px-2 py-3 w-8"></th>
               <th class="px-4 py-3">Plant</th>
               <th class="px-4 py-3">Variety</th>
               <th class="px-4 py-3">Season</th>
@@ -385,23 +487,34 @@
               <th class="px-4 py-3">Thinning</th>
               <th class="px-4 py-3">Days</th>
               <th class="px-4 py-3">Sow depth</th>
-              <th class="px-4 py-3">Germination</th>
               <th class="px-4 py-3">When to sow</th>
               <th class="px-4 py-3">Journal</th>
+              <th class="px-4 py-3"></th>
             </tr>
           </thead>
           <tbody>
             {#if loading}
               <tr>
-              <td class="px-4 py-4 text-earth-text/60" colspan="13">Loading plants…</td>
-            </tr>
-          {:else if plants.length === 0}
-            <tr>
-              <td class="px-4 py-4 text-earth-text/60" colspan="13">No plants yet.</td>
-            </tr>
-          {:else}
-            {#each plants as plant}
+                <td class="px-4 py-4 text-earth-text/60" colspan="14">Loading plants…</td>
+              </tr>
+            {:else if plants.length === 0}
+              <tr>
+                <td class="px-4 py-4 text-earth-text/60" colspan="14">No plants yet.</td>
+              </tr>
+            {:else if filteredPlants.length === 0}
+              <tr>
+                <td class="px-4 py-4 text-earth-text/60" colspan="14">No plants match your filters.</td>
+              </tr>
+            {:else}
+            {#each pagedPlants as plant}
               <tr class="border-t border-earth-border">
+                <td class="px-2 py-3 text-center">
+                  <button
+                    class="text-lg leading-none transition-colors {plant.is_starred ? 'text-amber-400' : 'text-earth-border hover:text-amber-300'}"
+                    on:click={() => toggleStar(plant)}
+                    title={plant.is_starred ? 'Unstar' : 'Star'}
+                  >★</button>
+                </td>
                 <td class="px-4 py-3 font-semibold">{plant.name}</td>
                 <td class="px-4 py-3">{plant.variety || '—'}</td>
                 <td class="px-4 py-3">{plant.season || '—'}</td>
@@ -412,7 +525,6 @@
                 <td class="px-4 py-3">{plant.thinning || '—'}</td>
                 <td class="px-4 py-3">{plant.days_to_maturity ?? '—'}</td>
                 <td class="px-4 py-3">{plant.sow_depth || '—'}</td>
-                <td class="px-4 py-3">{plant.germination_time || '—'}</td>
                 <td class="px-4 py-3">{plant.when_to_sow || '—'}</td>
                 <td class="px-4 py-3">
                   {#if journalLoading}
@@ -431,6 +543,22 @@
                     </div>
                   {/if}
                 </td>
+                <td class="px-4 py-3">
+                  <div class="flex gap-2">
+                    <button
+                      class="rounded-full border border-earth-border px-3 py-1 text-xs"
+                      on:click={() => openEditModal(plant)}
+                    >
+                      Edit
+                    </button>
+                    <button
+                      class="rounded-full border border-earth-border px-3 py-1 text-xs text-rose-700"
+                      on:click={() => (confirmDeletePlantId = plant.id)}
+                    >
+                      Delete
+                    </button>
+                  </div>
+                </td>
               </tr>
             {/each}
           {/if}
@@ -446,15 +574,25 @@
           <div class="rounded-2xl border border-earth-border bg-earth-bg/70 p-4 text-sm text-earth-text/60">
             No plants yet.
           </div>
+        {:else if filteredPlants.length === 0}
+          <div class="rounded-2xl border border-earth-border bg-earth-bg/70 p-4 text-sm text-earth-text/60">
+            No plants match your filters.
+          </div>
         {:else}
-          {#each plants as plant}
+          {#each pagedPlants as plant}
             <div class="rounded-2xl border border-earth-border bg-white p-4">
               <div class="flex items-start justify-between gap-4">
-                <div>
-                  <p class="text-sm font-semibold">{plant.name}</p>
-                  <p class="text-xs text-earth-text/60">
-                    {plant.variety || '—'} · {plant.season || '—'}
-                  </p>
+                <div class="flex items-center gap-2">
+                  <button
+                    class="text-lg leading-none transition-colors {plant.is_starred ? 'text-amber-400' : 'text-earth-border'}"
+                    on:click={() => toggleStar(plant)}
+                  >★</button>
+                  <div>
+                    <p class="text-sm font-semibold">{plant.name}</p>
+                    <p class="text-xs text-earth-text/60">
+                      {plant.variety || '—'} · {plant.season || '—'}
+                    </p>
+                  </div>
                 </div>
                 <span class="rounded-full border border-earth-border px-3 py-1 text-xs">
                   {plant.spacing || '—'}
@@ -467,16 +605,65 @@
                   <div>Thinning: {plant.thinning || '—'}</div>
                   <div>Days to maturity: {plant.days_to_maturity ?? '—'}</div>
                   <div>Sow depth: {plant.sow_depth || '—'}</div>
-                  <div>Germination: {plant.germination_time || '—'}</div>
                   <div>When to sow: {plant.when_to_sow || '—'}</div>
                 </div>
               <div class="mt-3 text-xs text-earth-text/70">
                 Journal: {(journalByPlant[plant.id] ?? []).length || '—'}
               </div>
+              <div class="mt-3 flex gap-2">
+                <button
+                  class="rounded-full border border-earth-border px-3 py-1 text-xs"
+                  on:click={() => openEditModal(plant)}
+                >
+                  Edit
+                </button>
+                <button
+                  class="rounded-full border border-earth-border px-3 py-1 text-xs text-rose-700"
+                  on:click={() => (confirmDeletePlantId = plant.id)}
+                >
+                  Delete
+                </button>
+              </div>
             </div>
           {/each}
         {/if}
       </div>
+
+      {#if totalPages > 1}
+        <div class="flex flex-wrap items-center justify-between gap-4 border-t border-earth-border px-6 py-4">
+          <p class="text-xs text-earth-text/60">
+            Page {safePage} of {totalPages} · {filteredPlants.length} plants
+          </p>
+          <div class="flex items-center gap-2">
+            <button
+              class="rounded-full border border-earth-border px-4 py-1.5 text-xs font-semibold disabled:opacity-40"
+              disabled={safePage <= 1}
+              on:click={() => (currentPage = safePage - 1)}
+            >
+              Prev
+            </button>
+            {#each Array.from({ length: totalPages }, (_, i) => i + 1) as page}
+              {#if totalPages <= 7 || page === 1 || page === totalPages || Math.abs(page - safePage) <= 1}
+                <button
+                  class="rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors {page === safePage ? 'border-earth-forest bg-earth-forest text-earth-bg' : 'border-earth-border text-earth-text/70'}"
+                  on:click={() => (currentPage = page)}
+                >
+                  {page}
+                </button>
+              {:else if Math.abs(page - safePage) === 2}
+                <span class="px-1 text-xs text-earth-text/40">…</span>
+              {/if}
+            {/each}
+            <button
+              class="rounded-full border border-earth-border px-4 py-1.5 text-xs font-semibold disabled:opacity-40"
+              disabled={safePage >= totalPages}
+              on:click={() => (currentPage = safePage + 1)}
+            >
+              Next
+            </button>
+          </div>
+        </div>
+      {/if}
     </div>
   </div>
 
@@ -559,13 +746,13 @@
   </div>
 
   {#if showModal}
-    <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
-      <div class="w-full max-w-xl rounded-3xl border border-earth-border bg-earth-surface p-6">
+    <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4 py-6">
+      <div class="w-full max-w-xl max-h-[90vh] overflow-y-auto rounded-3xl border border-earth-border bg-earth-surface p-6">
         <div class="flex items-center justify-between">
-          <h2 class="text-lg font-semibold">Add plant</h2>
+          <h2 class="text-lg font-semibold">{editingPlantId ? 'Edit plant' : 'Add plant'}</h2>
           <button
             class="rounded-full border border-earth-border px-3 py-1 text-xs"
-            on:click={() => (showModal = false)}
+            on:click={() => { resetPlantForm(); showModal = false; }}
           >
             Close
           </button>
@@ -664,16 +851,6 @@
             />
           </div>
           <div class="md:col-span-2">
-            <label class="text-xs uppercase tracking-[0.2em] text-earth-terracotta">
-              Germination time
-            </label>
-            <input
-              class="mt-2 w-full rounded-2xl border border-earth-border bg-white px-3 py-2 text-sm"
-              placeholder="7-10 days"
-              bind:value={germinationTime}
-            />
-          </div>
-          <div class="md:col-span-2">
             <label class="text-xs uppercase tracking-[0.2em] text-earth-terracotta">Notes</label>
             <textarea
               class="mt-2 h-24 w-full rounded-2xl border border-earth-border bg-white p-3 text-sm"
@@ -692,7 +869,7 @@
         <div class="mt-4 flex flex-wrap gap-3">
           <button
             class="rounded-full border border-earth-border px-5 py-2.5 text-sm font-semibold"
-            on:click={() => (showModal = false)}
+            on:click={() => { resetPlantForm(); showModal = false; }}
           >
             Cancel
           </button>
@@ -704,7 +881,7 @@
             }}
             disabled={isSaving}
           >
-            {isSaving ? 'Saving…' : 'Save plant'}
+            {isSaving ? 'Saving…' : editingPlantId ? 'Update plant' : 'Save plant'}
           </button>
         </div>
       </div>
@@ -789,7 +966,6 @@
                 <option value="thinning">Thinning</option>
                 <option value="days_to_maturity">Days to maturity</option>
                 <option value="depth">Sow depth</option>
-                <option value="germination_time">Germination time</option>
                 <option value="when_to_sow">When to sow</option>
                 <option value="notes">Notes</option>
               </select>
@@ -1025,15 +1201,6 @@
               </div>
               <div class="md:col-span-2">
                 <label class="text-xs uppercase tracking-[0.2em] text-earth-terracotta">
-                  Germination time
-                </label>
-                <input
-                  class="mt-2 w-full rounded-2xl border border-earth-border bg-white px-3 py-2 text-sm"
-                  bind:value={germinationTime}
-                />
-              </div>
-              <div class="md:col-span-2">
-                <label class="text-xs uppercase tracking-[0.2em] text-earth-terracotta">
                   When to sow
                 </label>
                 <textarea
@@ -1083,6 +1250,42 @@
             </div>
           </div>
         {/if}
+      </div>
+    </div>
+  {/if}
+
+  {#if confirmDeletePlantId}
+    <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+      <div class="w-full max-w-lg rounded-3xl border border-earth-border bg-earth-surface p-6">
+        <div class="flex items-center justify-between">
+          <h2 class="text-lg font-semibold">Delete plant?</h2>
+          <button
+            class="rounded-full border border-earth-border px-3 py-1 text-xs"
+            on:click={() => (confirmDeletePlantId = null)}
+          >
+            Close
+          </button>
+        </div>
+        <div class="mt-4 rounded-2xl border border-earth-border bg-white/80 p-4 text-sm">
+          <p class="text-earth-text/70">This will permanently remove the plant from the registry. This action cannot be undone.</p>
+        </div>
+        <div class="mt-6 flex flex-wrap gap-3">
+          <button
+            class="rounded-full border border-earth-border px-5 py-2.5 text-sm font-semibold"
+            on:click={() => (confirmDeletePlantId = null)}
+          >
+            Cancel
+          </button>
+          <button
+            class="rounded-full bg-rose-600 px-5 py-2.5 text-sm font-semibold text-white"
+            on:click={async () => {
+              await handleDeletePlant(confirmDeletePlantId);
+              confirmDeletePlantId = null;
+            }}
+          >
+            Delete plant
+          </button>
+        </div>
       </div>
     </div>
   {/if}

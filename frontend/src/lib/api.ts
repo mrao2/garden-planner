@@ -48,12 +48,12 @@ export type Plant = {
   notes: string;
   days_to_maturity?: number | null;
   sow_depth: string;
-  germination_time: string;
   when_to_sow: string;
   days_to_emerge: string;
   seed_spacing: string;
   row_spacing: string;
   thinning: string;
+  is_starred: boolean;
   created_at: string;
   updated_at: string;
 };
@@ -111,6 +111,7 @@ type ListParams = {
   limit?: number;
   offset?: number;
   q?: string;
+  garden_id?: string;
 };
 
 type CreateGardenInput = {
@@ -160,7 +161,6 @@ type CreatePlantInput = {
   notes?: string;
   days_to_maturity?: number | null;
   sow_depth?: string;
-  germination_time?: string;
   when_to_sow?: string;
   days_to_emerge?: string;
   seed_spacing?: string;
@@ -214,6 +214,7 @@ function toQuery(params?: ListParams): string {
   if (params.limit !== undefined) search.set('limit', String(params.limit));
   if (params.offset !== undefined) search.set('offset', String(params.offset));
   if (params.q) search.set('q', params.q);
+  if (params.garden_id) search.set('garden_id', params.garden_id);
   const qs = search.toString();
   return qs ? `?${qs}` : '';
 }
@@ -363,7 +364,6 @@ export async function createPlant(input: CreatePlantInput): Promise<Plant> {
       notes: input.notes ?? '',
       days_to_maturity: input.days_to_maturity ?? null,
       sow_depth: input.sow_depth ?? '',
-      germination_time: input.germination_time ?? '',
       when_to_sow: input.when_to_sow ?? '',
       days_to_emerge: input.days_to_emerge ?? '',
       seed_spacing: input.seed_spacing ?? '',
@@ -470,7 +470,6 @@ export type SeedPacketScan = {
   notes: string;
   days_to_maturity?: number | null;
   sow_depth: string;
-  germination_time: string;
   when_to_sow: string;
   days_to_emerge: string;
   seed_spacing: string;

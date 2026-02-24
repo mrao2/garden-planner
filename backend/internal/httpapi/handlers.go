@@ -87,22 +87,22 @@ type planter struct {
 }
 
 type plant struct {
-	ID              string    `json:"id"`
-	Name            string    `json:"name"`
-	Variety         string    `json:"variety"`
-	Season          string    `json:"season"`
-	Spacing         string    `json:"spacing"`
-	Notes           string    `json:"notes"`
-	DaysToMaturity  *int      `json:"days_to_maturity,omitempty"`
-	SowDepth        string    `json:"sow_depth"`
-	GerminationTime string    `json:"germination_time"`
-	WhenToSow       string    `json:"when_to_sow"`
-	DaysToEmerge    string    `json:"days_to_emerge"`
-	SeedSpacing     string    `json:"seed_spacing"`
-	RowSpacing      string    `json:"row_spacing"`
-	Thinning        string    `json:"thinning"`
-	CreatedAt       time.Time `json:"created_at"`
-	UpdatedAt       time.Time `json:"updated_at"`
+	ID             string    `json:"id"`
+	Name           string    `json:"name"`
+	Variety        string    `json:"variety"`
+	Season         string    `json:"season"`
+	Spacing        string    `json:"spacing"`
+	Notes          string    `json:"notes"`
+	DaysToMaturity *int      `json:"days_to_maturity,omitempty"`
+	SowDepth       string    `json:"sow_depth"`
+	WhenToSow      string    `json:"when_to_sow"`
+	DaysToEmerge   string    `json:"days_to_emerge"`
+	SeedSpacing    string    `json:"seed_spacing"`
+	RowSpacing     string    `json:"row_spacing"`
+	Thinning       string    `json:"thinning"`
+	IsStarred      bool      `json:"is_starred"`
+	CreatedAt      time.Time `json:"created_at"`
+	UpdatedAt      time.Time `json:"updated_at"`
 }
 
 type journalPlantRef struct {
@@ -169,35 +169,35 @@ type updateBedRequest struct {
 }
 
 type createPlantRequest struct {
-	Name            string `json:"name"`
-	Variety         string `json:"variety"`
-	Season          string `json:"season"`
-	Spacing         string `json:"spacing"`
-	Notes           string `json:"notes"`
-	DaysToMaturity  *int   `json:"days_to_maturity"`
-	SowDepth        string `json:"sow_depth"`
-	GerminationTime string `json:"germination_time"`
-	WhenToSow       string `json:"when_to_sow"`
-	DaysToEmerge    string `json:"days_to_emerge"`
-	SeedSpacing     string `json:"seed_spacing"`
-	RowSpacing      string `json:"row_spacing"`
-	Thinning        string `json:"thinning"`
+	Name           string `json:"name"`
+	Variety        string `json:"variety"`
+	Season         string `json:"season"`
+	Spacing        string `json:"spacing"`
+	Notes          string `json:"notes"`
+	DaysToMaturity *int   `json:"days_to_maturity"`
+	SowDepth       string `json:"sow_depth"`
+	WhenToSow      string `json:"when_to_sow"`
+	DaysToEmerge   string `json:"days_to_emerge"`
+	SeedSpacing    string `json:"seed_spacing"`
+	RowSpacing     string `json:"row_spacing"`
+	Thinning       string `json:"thinning"`
+	IsStarred      bool   `json:"is_starred"`
 }
 
 type updatePlantRequest struct {
-	Name            *string `json:"name"`
-	Variety         *string `json:"variety"`
-	Season          *string `json:"season"`
-	Spacing         *string `json:"spacing"`
-	Notes           *string `json:"notes"`
-	DaysToMaturity  *int    `json:"days_to_maturity"`
-	SowDepth        *string `json:"sow_depth"`
-	GerminationTime *string `json:"germination_time"`
-	WhenToSow       *string `json:"when_to_sow"`
-	DaysToEmerge    *string `json:"days_to_emerge"`
-	SeedSpacing     *string `json:"seed_spacing"`
-	RowSpacing      *string `json:"row_spacing"`
-	Thinning        *string `json:"thinning"`
+	Name           *string `json:"name"`
+	Variety        *string `json:"variety"`
+	Season         *string `json:"season"`
+	Spacing        *string `json:"spacing"`
+	Notes          *string `json:"notes"`
+	DaysToMaturity *int    `json:"days_to_maturity"`
+	SowDepth       *string `json:"sow_depth"`
+	WhenToSow      *string `json:"when_to_sow"`
+	DaysToEmerge   *string `json:"days_to_emerge"`
+	SeedSpacing    *string `json:"seed_spacing"`
+	RowSpacing     *string `json:"row_spacing"`
+	Thinning       *string `json:"thinning"`
+	IsStarred      *bool   `json:"is_starred"`
 }
 
 type createJournalEntryRequest struct {
@@ -990,7 +990,7 @@ func (h *Handlers) deletePlanter(w http.ResponseWriter, r *http.Request) {
 	respondJSON(w, http.StatusOK, dataEnvelope[map[string]string]{Data: map[string]string{"status": "deleted"}})
 }
 func (h *Handlers) listPlants(w http.ResponseWriter, r *http.Request) {
-	limit := clampQueryInt(r, "limit", 50, 1, 200)
+	limit := clampQueryInt(r, "limit", 50, 1, 500)
 	offset := clampQueryInt(r, "offset", 0, 0, 10000)
 	queryText := strings.TrimSpace(r.URL.Query().Get("q"))
 
@@ -998,17 +998,17 @@ func (h *Handlers) listPlants(w http.ResponseWriter, r *http.Request) {
 	var err error
 	if queryText != "" {
 		rows, err = h.db.Query(`
-			SELECT id, name, variety, season, spacing, notes, days_to_maturity, sow_depth, germination_time, when_to_sow, days_to_emerge, seed_spacing, row_spacing, thinning, created_at, updated_at
+			SELECT id, name, variety, season, spacing, notes, days_to_maturity, sow_depth, when_to_sow, days_to_emerge, seed_spacing, row_spacing, thinning, is_starred, created_at, updated_at
 			FROM plants
 			WHERE name ILIKE '%' || $1 || '%' OR variety ILIKE '%' || $1 || '%'
-			ORDER BY created_at DESC
+			ORDER BY is_starred DESC, created_at DESC
 			LIMIT $2 OFFSET $3
 		`, queryText, limit, offset)
 	} else {
 		rows, err = h.db.Query(`
-			SELECT id, name, variety, season, spacing, notes, days_to_maturity, sow_depth, germination_time, when_to_sow, days_to_emerge, seed_spacing, row_spacing, thinning, created_at, updated_at
+			SELECT id, name, variety, season, spacing, notes, days_to_maturity, sow_depth, when_to_sow, days_to_emerge, seed_spacing, row_spacing, thinning, is_starred, created_at, updated_at
 			FROM plants
-			ORDER BY created_at DESC
+			ORDER BY is_starred DESC, created_at DESC
 			LIMIT $1 OFFSET $2
 		`, limit, offset)
 	}
@@ -1022,7 +1022,7 @@ func (h *Handlers) listPlants(w http.ResponseWriter, r *http.Request) {
 	for rows.Next() {
 		var p plant
 		var days sql.NullInt64
-		if err := rows.Scan(&p.ID, &p.Name, &p.Variety, &p.Season, &p.Spacing, &p.Notes, &days, &p.SowDepth, &p.GerminationTime, &p.WhenToSow, &p.DaysToEmerge, &p.SeedSpacing, &p.RowSpacing, &p.Thinning, &p.CreatedAt, &p.UpdatedAt); err != nil {
+		if err := rows.Scan(&p.ID, &p.Name, &p.Variety, &p.Season, &p.Spacing, &p.Notes, &days, &p.SowDepth, &p.WhenToSow, &p.DaysToEmerge, &p.SeedSpacing, &p.RowSpacing, &p.Thinning, &p.IsStarred, &p.CreatedAt, &p.UpdatedAt); err != nil {
 			respondError(w, http.StatusInternalServerError, "db_scan_failed", "Unable to read plants")
 			return
 		}
@@ -1050,11 +1050,11 @@ func (h *Handlers) createPlant(w http.ResponseWriter, r *http.Request) {
 	var p plant
 	var days sql.NullInt64
 	row := h.db.QueryRow(`
-		INSERT INTO plants (name, variety, season, spacing, notes, days_to_maturity, sow_depth, germination_time, when_to_sow, days_to_emerge, seed_spacing, row_spacing, thinning)
+		INSERT INTO plants (name, variety, season, spacing, notes, days_to_maturity, sow_depth, when_to_sow, days_to_emerge, seed_spacing, row_spacing, thinning, is_starred)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
-		RETURNING id, name, variety, season, spacing, notes, days_to_maturity, sow_depth, germination_time, when_to_sow, days_to_emerge, seed_spacing, row_spacing, thinning, created_at, updated_at
-	`, req.Name, req.Variety, req.Season, req.Spacing, req.Notes, req.DaysToMaturity, req.SowDepth, req.GerminationTime, req.WhenToSow, req.DaysToEmerge, req.SeedSpacing, req.RowSpacing, req.Thinning)
-	if err := row.Scan(&p.ID, &p.Name, &p.Variety, &p.Season, &p.Spacing, &p.Notes, &days, &p.SowDepth, &p.GerminationTime, &p.WhenToSow, &p.DaysToEmerge, &p.SeedSpacing, &p.RowSpacing, &p.Thinning, &p.CreatedAt, &p.UpdatedAt); err != nil {
+		RETURNING id, name, variety, season, spacing, notes, days_to_maturity, sow_depth, when_to_sow, days_to_emerge, seed_spacing, row_spacing, thinning, is_starred, created_at, updated_at
+	`, req.Name, req.Variety, req.Season, req.Spacing, req.Notes, req.DaysToMaturity, req.SowDepth, req.WhenToSow, req.DaysToEmerge, req.SeedSpacing, req.RowSpacing, req.Thinning, req.IsStarred)
+	if err := row.Scan(&p.ID, &p.Name, &p.Variety, &p.Season, &p.Spacing, &p.Notes, &days, &p.SowDepth, &p.WhenToSow, &p.DaysToEmerge, &p.SeedSpacing, &p.RowSpacing, &p.Thinning, &p.IsStarred, &p.CreatedAt, &p.UpdatedAt); err != nil {
 		respondError(w, http.StatusInternalServerError, "db_insert_failed", "Unable to create plant")
 		return
 	}
@@ -1076,11 +1076,11 @@ func (h *Handlers) getPlant(w http.ResponseWriter, r *http.Request) {
 	var p plant
 	var days sql.NullInt64
 	row := h.db.QueryRow(`
-		SELECT id, name, variety, season, spacing, notes, days_to_maturity, sow_depth, germination_time, when_to_sow, days_to_emerge, seed_spacing, row_spacing, thinning, created_at, updated_at
+		SELECT id, name, variety, season, spacing, notes, days_to_maturity, sow_depth, when_to_sow, days_to_emerge, seed_spacing, row_spacing, thinning, is_starred, created_at, updated_at
 		FROM plants
 		WHERE id = $1
 	`, plantID)
-	if err := row.Scan(&p.ID, &p.Name, &p.Variety, &p.Season, &p.Spacing, &p.Notes, &days, &p.SowDepth, &p.GerminationTime, &p.WhenToSow, &p.DaysToEmerge, &p.SeedSpacing, &p.RowSpacing, &p.Thinning, &p.CreatedAt, &p.UpdatedAt); err != nil {
+	if err := row.Scan(&p.ID, &p.Name, &p.Variety, &p.Season, &p.Spacing, &p.Notes, &days, &p.SowDepth, &p.WhenToSow, &p.DaysToEmerge, &p.SeedSpacing, &p.RowSpacing, &p.Thinning, &p.IsStarred, &p.CreatedAt, &p.UpdatedAt); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			respondError(w, http.StatusNotFound, "not_found", "Plant not found")
 			return
@@ -1109,8 +1109,8 @@ func (h *Handlers) updatePlant(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	updates := make([]string, 0, 13)
-	args := make([]any, 0, 14)
+	updates := make([]string, 0, 14)
+	args := make([]any, 0, 15)
 	argID := 1
 
 	if req.Name != nil {
@@ -1153,11 +1153,6 @@ func (h *Handlers) updatePlant(w http.ResponseWriter, r *http.Request) {
 		args = append(args, *req.SowDepth)
 		argID++
 	}
-	if req.GerminationTime != nil {
-		updates = append(updates, "germination_time = $"+itoa(argID))
-		args = append(args, *req.GerminationTime)
-		argID++
-	}
 	if req.WhenToSow != nil {
 		updates = append(updates, "when_to_sow = $"+itoa(argID))
 		args = append(args, *req.WhenToSow)
@@ -1183,7 +1178,11 @@ func (h *Handlers) updatePlant(w http.ResponseWriter, r *http.Request) {
 		args = append(args, *req.Thinning)
 		argID++
 	}
-
+	if req.IsStarred != nil {
+		updates = append(updates, "is_starred = $"+itoa(argID))
+		args = append(args, *req.IsStarred)
+		argID++
+	}
 	if len(updates) == 0 {
 		respondError(w, http.StatusBadRequest, "no_updates", "No fields provided for update")
 		return
@@ -1193,11 +1192,11 @@ func (h *Handlers) updatePlant(w http.ResponseWriter, r *http.Request) {
 	args = append(args, plantID)
 
 	query := "UPDATE plants SET " + strings.Join(updates, ", ") + " WHERE id = $" + itoa(argID) +
-		" RETURNING id, name, variety, season, spacing, notes, days_to_maturity, sow_depth, germination_time, when_to_sow, days_to_emerge, seed_spacing, row_spacing, thinning, created_at, updated_at"
+		" RETURNING id, name, variety, season, spacing, notes, days_to_maturity, sow_depth, when_to_sow, days_to_emerge, seed_spacing, row_spacing, thinning, is_starred, created_at, updated_at"
 
 	var p plant
 	var days sql.NullInt64
-	if err := h.db.QueryRow(query, args...).Scan(&p.ID, &p.Name, &p.Variety, &p.Season, &p.Spacing, &p.Notes, &days, &p.SowDepth, &p.GerminationTime, &p.WhenToSow, &p.DaysToEmerge, &p.SeedSpacing, &p.RowSpacing, &p.Thinning, &p.CreatedAt, &p.UpdatedAt); err != nil {
+	if err := h.db.QueryRow(query, args...).Scan(&p.ID, &p.Name, &p.Variety, &p.Season, &p.Spacing, &p.Notes, &days, &p.SowDepth, &p.WhenToSow, &p.DaysToEmerge, &p.SeedSpacing, &p.RowSpacing, &p.Thinning, &p.IsStarred, &p.CreatedAt, &p.UpdatedAt); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			respondError(w, http.StatusNotFound, "not_found", "Plant not found")
 			return
@@ -1238,13 +1237,33 @@ func (h *Handlers) deletePlant(w http.ResponseWriter, r *http.Request) {
 func (h *Handlers) listJournalEntries(w http.ResponseWriter, r *http.Request) {
 	limit := clampQueryInt(r, "limit", 50, 1, 200)
 	offset := clampQueryInt(r, "offset", 0, 0, 10000)
+	gardenID := strings.TrimSpace(r.URL.Query().Get("garden_id"))
 
-	rows, err := h.db.Query(`
-		SELECT id, garden_id, entry_date, text, created_at, updated_at
-		FROM journal_entries
-		ORDER BY entry_date DESC, created_at DESC
-		LIMIT $1 OFFSET $2
-	`, limit, offset)
+	if gardenID != "" {
+		if _, err := uuid.Parse(gardenID); err != nil {
+			respondError(w, http.StatusBadRequest, "invalid_id", "Garden ID is invalid")
+			return
+		}
+	}
+
+	var rows *sql.Rows
+	var err error
+	if gardenID != "" {
+		rows, err = h.db.Query(`
+			SELECT id, garden_id, entry_date, text, created_at, updated_at
+			FROM journal_entries
+			WHERE garden_id = $1
+			ORDER BY entry_date DESC, created_at DESC
+			LIMIT $2 OFFSET $3
+		`, gardenID, limit, offset)
+	} else {
+		rows, err = h.db.Query(`
+			SELECT id, garden_id, entry_date, text, created_at, updated_at
+			FROM journal_entries
+			ORDER BY entry_date DESC, created_at DESC
+			LIMIT $1 OFFSET $2
+		`, limit, offset)
+	}
 	if err != nil {
 		respondError(w, http.StatusInternalServerError, "db_query_failed", "Unable to load journal entries")
 		return
@@ -1803,7 +1822,7 @@ func (h *Handlers) idExists(table string, id string) bool {
 }
 
 func (h *Handlers) loadPlants() ([]plant, error) {
-	rows, err := h.db.Query(`SELECT id, name, variety, season, spacing, notes, days_to_maturity, sow_depth, germination_time, when_to_sow, days_to_emerge, seed_spacing, row_spacing, thinning, created_at, updated_at FROM plants`)
+	rows, err := h.db.Query(`SELECT id, name, variety, season, spacing, notes, days_to_maturity, sow_depth, when_to_sow, days_to_emerge, seed_spacing, row_spacing, thinning, created_at, updated_at FROM plants`)
 	if err != nil {
 		return nil, err
 	}
@@ -1813,7 +1832,7 @@ func (h *Handlers) loadPlants() ([]plant, error) {
 	for rows.Next() {
 		var p plant
 		var days sql.NullInt64
-		if err := rows.Scan(&p.ID, &p.Name, &p.Variety, &p.Season, &p.Spacing, &p.Notes, &days, &p.SowDepth, &p.GerminationTime, &p.WhenToSow, &p.DaysToEmerge, &p.SeedSpacing, &p.RowSpacing, &p.Thinning, &p.CreatedAt, &p.UpdatedAt); err != nil {
+		if err := rows.Scan(&p.ID, &p.Name, &p.Variety, &p.Season, &p.Spacing, &p.Notes, &days, &p.SowDepth, &p.WhenToSow, &p.DaysToEmerge, &p.SeedSpacing, &p.RowSpacing, &p.Thinning, &p.IsStarred, &p.CreatedAt, &p.UpdatedAt); err != nil {
 			return nil, err
 		}
 		if days.Valid {

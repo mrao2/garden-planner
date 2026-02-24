@@ -107,7 +107,7 @@
 
   <div class="mt-6 rounded-2xl border border-earth-border bg-earth-bg/70 p-4">
     <svg
-      class="h-72 w-full rounded-xl border border-dashed border-earth-border bg-white"
+      class="h-48 w-full rounded-xl border border-dashed border-earth-border bg-white md:h-72"
       viewBox="0 0 520 280"
       role="img"
       aria-label="Bed layout editor"

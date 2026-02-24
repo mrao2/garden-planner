@@ -388,7 +388,7 @@
 
   <div class="mt-8 rounded-3xl border border-earth-border bg-earth-surface p-6">
     <div class="flex flex-wrap items-center gap-4">
-      <div class="min-w-[220px]">
+      <div class="w-full sm:w-auto sm:min-w-[220px]">
         <label class="text-xs uppercase tracking-[0.3em] text-earth-terracotta">Garden</label>
         <select
           class="mt-2 w-full rounded-2xl border border-earth-border bg-white px-3 py-2 text-sm"
@@ -431,7 +431,7 @@
       </div>
     {/if}
 
-    <div class="mt-6 overflow-hidden rounded-2xl border border-earth-border bg-white">
+    <div class="mt-6 hidden overflow-x-auto rounded-2xl border border-earth-border bg-white sm:block">
       <table class="w-full text-left text-sm">
         <thead class="bg-earth-bg/80 text-xs uppercase tracking-[0.2em] text-earth-terracotta">
           <tr>
@@ -533,6 +533,77 @@
         </tbody>
       </table>
     </div>
+
+    <div class="mt-6 space-y-4 sm:hidden">
+      {#if loading}
+        <div class="rounded-2xl border border-earth-border bg-white p-4 text-sm text-earth-text/60">Loading beds…</div>
+      {:else if beds.length === 0}
+        <div class="rounded-2xl border border-earth-border bg-white p-4 text-sm text-earth-text/60">No beds yet for this garden.</div>
+      {:else}
+        {#each beds as bed}
+          <div class="rounded-2xl border border-earth-border bg-white p-4">
+            <div class="flex items-start justify-between gap-2">
+              <p class="font-semibold">{bed.name}</p>
+              <div class="flex shrink-0 gap-2">
+                <button
+                  class="rounded-full border border-earth-border px-3 py-1 text-xs"
+                  on:click={() => {
+                    formError = null;
+                    editingId = bed.id;
+                    bedName = bed.name;
+                    bedNotes = bed.notes ?? '';
+                    bedType = bed.type ?? '';
+                    bedShape = bed.shape ?? 'rectangle';
+                    bedSun = bed.sun_level ?? 'full-sun';
+                    bedWatering = bed.watering_type ?? 'hand-watered';
+                    bedWidth = String(bed.width);
+                    bedLength = bed.length ? String(bed.length) : '';
+                    bedHeight = String(bed.height);
+                    showModal = true;
+                  }}
+                >Edit</button>
+                <button
+                  class="rounded-full border border-earth-border px-3 py-1 text-xs text-rose-700"
+                  on:click={() => handleDelete(bed.id)}
+                >Delete</button>
+              </div>
+            </div>
+            <div class="mt-2 grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-earth-text/70">
+              <div>Type: {bed.type || '—'}</div>
+              <div>Shape: {bed.shape}</div>
+              <div>Sun: {bed.sun_level || '—'}</div>
+              <div>Watering: {bed.watering_type || '—'}</div>
+              <div class="col-span-2">Size: {Math.round(bed.width)}{bed.shape === 'rectangle' && bed.length ? ` × ${Math.round(bed.length)}` : ''} × {Math.round(bed.height)}</div>
+            </div>
+            {#if bed.notes}
+              <p class="mt-2 text-xs text-earth-text/60">{bed.notes}</p>
+            {/if}
+            <div class="mt-3 space-y-2">
+              <p class="text-xs uppercase tracking-[0.2em] text-earth-terracotta">Plantings</p>
+              {#if (plantingsByBed[bed.id] ?? []).length === 0}
+                <p class="text-xs text-earth-text/60">None yet.</p>
+              {:else}
+                {#each plantingsByBed[bed.id] ?? [] as planting}
+                  <div class="flex flex-wrap items-center gap-2">
+                    <span class="rounded-full bg-earth-bg/70 px-2 py-1 text-xs">
+                      {planting.plant_name}{planting.variety ? ` · ${planting.variety}` : ''} · {formatDate(planting.start_date)}{planting.end_date ? ` → ${formatDate(planting.end_date)}` : ''}
+                    </span>
+                    <button
+                      class="rounded-full border border-earth-border px-2 py-0.5 text-[10px] text-rose-700"
+                      on:click={() => handleDeletePlanting(planting.id, bed.id)}
+                    >Remove</button>
+                  </div>
+                {/each}
+              {/if}
+              <button
+                class="rounded-full border border-earth-border px-2 py-1 text-xs"
+                on:click={() => openPlantingModal(bed.id)}
+              >Assign plant</button>
+            </div>
+          </div>
+        {/each}
+      {/if}
+    </div>
   </div>
 
   <div class="mt-8 rounded-3xl border border-earth-border bg-earth-surface p-6">
@@ -551,7 +622,7 @@
         Add planter
       </button>
     </div>
-    <div class="mt-6 overflow-hidden rounded-2xl border border-earth-border bg-white">
+    <div class="mt-6 hidden overflow-x-auto rounded-2xl border border-earth-border bg-white sm:block">
       <table class="w-full text-left text-sm">
         <thead class="bg-earth-bg/80 text-xs uppercase tracking-[0.2em] text-earth-terracotta">
           <tr>
@@ -600,6 +671,33 @@
         </tbody>
       </table>
     </div>
+
+    <div class="mt-6 space-y-4 sm:hidden">
+      {#if loading}
+        <div class="rounded-2xl border border-earth-border bg-white p-4 text-sm text-earth-text/60">Loading planters…</div>
+      {:else if planters.length === 0}
+        <div class="rounded-2xl border border-earth-border bg-white p-4 text-sm text-earth-text/60">No planters yet.</div>
+      {:else}
+        {#each planters as planter}
+          <div class="rounded-2xl border border-earth-border bg-white p-4">
+            <div class="flex items-start justify-between gap-2">
+              <p class="font-semibold">{planter.name}</p>
+              <button
+                class="rounded-full border border-earth-border px-3 py-1 text-xs text-rose-700"
+                on:click={() => handleDeletePlanter(planter.id)}
+              >Delete</button>
+            </div>
+            <div class="mt-2 grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-earth-text/70">
+              <div>Type: {planter.type || '—'}</div>
+              <div>Kind: {planter.planter_type || '—'}</div>
+              <div>Sun: {planter.sun_level || '—'}</div>
+              <div>Watering: {planter.watering_type || '—'}</div>
+              <div class="col-span-2">Size: {Math.round(planter.width)}{planter.shape === 'rectangle' && planter.length ? ` × ${Math.round(planter.length)}` : ''} × {Math.round(planter.height)} · {planter.shape}</div>
+            </div>
+          </div>
+        {/each}
+      {/if}
+    </div>
   </div>
 
   {#if plantingError}
@@ -609,8 +707,8 @@
   {/if}
 
   {#if showModal}
-    <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
-      <div class="w-full max-w-xl rounded-3xl border border-earth-border bg-earth-surface p-6">
+    <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4 py-6">
+      <div class="w-full max-w-xl max-h-[90vh] overflow-y-auto rounded-3xl border border-earth-border bg-earth-surface p-6">
         <div class="flex items-center justify-between">
           <h2 class="text-lg font-semibold">{editingId ? 'Edit bed' : 'Add bed'}</h2>
           <button
@@ -745,8 +843,8 @@
   {/if}
 
   {#if showPlantingModal}
-    <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
-      <div class="w-full max-w-xl rounded-3xl border border-earth-border bg-earth-surface p-6">
+    <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4 py-6">
+      <div class="w-full max-w-xl max-h-[90vh] overflow-y-auto rounded-3xl border border-earth-border bg-earth-surface p-6">
         <div class="flex items-center justify-between">
           <h2 class="text-lg font-semibold">Assign plant to bed</h2>
           <button
@@ -846,8 +944,8 @@
   {/if}
 
   {#if showPlanterModal}
-    <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
-      <div class="w-full max-w-xl rounded-3xl border border-earth-border bg-earth-surface p-6">
+    <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4 py-6">
+      <div class="w-full max-w-xl max-h-[90vh] overflow-y-auto rounded-3xl border border-earth-border bg-earth-surface p-6">
         <div class="flex items-center justify-between">
           <h2 class="text-lg font-semibold">Add planter</h2>
           <button

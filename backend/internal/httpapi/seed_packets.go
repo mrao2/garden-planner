@@ -14,21 +14,20 @@ import (
 )
 
 type seedPacketScanResponse struct {
-	Text            string             `json:"text"`
-	Name            string             `json:"name"`
-	Variety         string             `json:"variety"`
-	Season          string             `json:"season"`
-	Spacing         string             `json:"spacing"`
-	Notes           string             `json:"notes"`
-	DaysToMaturity  *int               `json:"days_to_maturity"`
-	SowDepth        string             `json:"sow_depth"`
-	GerminationTime string             `json:"germination_time"`
-	WhenToSow       string             `json:"when_to_sow"`
-	DaysToEmerge    string             `json:"days_to_emerge"`
-	SeedSpacing     string             `json:"seed_spacing"`
-	RowSpacing      string             `json:"row_spacing"`
-	Thinning        string             `json:"thinning"`
-	Boxes           map[string]scanBox `json:"boxes,omitempty"`
+	Text           string             `json:"text"`
+	Name           string             `json:"name"`
+	Variety        string             `json:"variety"`
+	Season         string             `json:"season"`
+	Spacing        string             `json:"spacing"`
+	Notes          string             `json:"notes"`
+	DaysToMaturity *int               `json:"days_to_maturity"`
+	SowDepth       string             `json:"sow_depth"`
+	WhenToSow      string             `json:"when_to_sow"`
+	DaysToEmerge   string             `json:"days_to_emerge"`
+	SeedSpacing    string             `json:"seed_spacing"`
+	RowSpacing     string             `json:"row_spacing"`
+	Thinning       string             `json:"thinning"`
+	Boxes          map[string]scanBox `json:"boxes,omitempty"`
 }
 
 type scanBox struct {
@@ -157,12 +156,11 @@ func (h *Handlers) scanSeedPacket(w http.ResponseWriter, r *http.Request) {
 func parseSeedPacketText(textName string, textSpecs string, textSow string, textFull string) seedPacketScanResponse {
 	combined := strings.TrimSpace(strings.Join([]string{textName, textSpecs, textSow, textFull}, "\n"))
 	response := seedPacketScanResponse{
-		Text:            combined,
-		Season:          "",
-		Spacing:         "",
-		Notes:           "",
-		SowDepth:        "",
-		GerminationTime: "",
+		Text:    combined,
+		Season:  "",
+		Spacing: "",
+		Notes:   "",
+		SowDepth: "",
 	}
 
 	lines := make([]string, 0)
@@ -233,8 +231,10 @@ func parseSeedPacketText(textName string, textSpecs string, textSow string, text
 	if match := sowDepthRe.FindStringSubmatch(textSpecs); len(match) > 2 {
 		response.SowDepth = strings.TrimSpace(match[2])
 	}
-	if match := germinationRe.FindStringSubmatch(textSpecs); len(match) > 2 {
-		response.GerminationTime = strings.TrimSpace(match[2])
+	if response.DaysToEmerge == "" {
+		if match := germinationRe.FindStringSubmatch(textSpecs); len(match) > 2 {
+			response.DaysToEmerge = strings.TrimSpace(match[2])
+		}
 	}
 	if match := daysToEmergeRe.FindStringSubmatch(textSpecs); len(match) > 2 {
 		response.DaysToEmerge = strings.TrimSpace(match[2])
